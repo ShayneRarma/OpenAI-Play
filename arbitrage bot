@@ -1,4 +1,4 @@
-write a cosmwasm contract in rust for an arbitrage bot with a destination wallet and two contract addresses to arbitrage
+//write a cosmwasm contract in rust for an arbitrage bot with a destination wallet and two contract addresses to arbitrage
 
 
 // This contract will arbitrage between two contract addresses and a destination wallet.
