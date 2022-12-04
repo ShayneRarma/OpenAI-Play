@@ -1,8 +1,8 @@
 //write a CosmWasm contract in Rust . For an overcollateralized stablecoin called sGPT. It will have a 150% collateralization rate. The collateral token will be Juno. It will also have a liquidation mechanism.
 
 use cosmwasm_std::{
-    attr, coin, from_binary, to_binary, Api, Binary, Env, Extern, HandleResponse, HumanAddr,
-    InitResponse, MessageInfo, StdError, StdResult, Storage, Uint128,
+attr, coin, from_binary, to_binary, Api, Binary, Env, Extern, HandleResponse, HumanAddr,
+InitResponse, MessageInfo, StdError, StdResult, Storage, Uint128,
 };
 
 #[macro_use]
@@ -18,173 +18,173 @@ pub static SGPT_TOKEN: &str = "SGPT";
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 struct Collateral {
-    // We represent collateral as a map of {token_symbol => amount}
-    token_symbol: String,
-    amount: Uint128,
+// We represent collateral as a map of {token_symbol => amount}
+token_symbol: String,
+amount: Uint128,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 struct State {
-    // We track the total amount of sGPT tokens in circulation
-    total_supply: Uint128,
-    // We track the total amount of collateral locked for the sGPT tokens
-    total_collateral: Uint128,
-    // We track the collateral that each individual user has locked for their sGPT tokens
-    collaterals: Vec<Collateral>,
+// We track the total amount of sGPT tokens in circulation
+total_supply: Uint128,
+// We track the total amount of collateral locked for the sGPT tokens
+total_collateral: Uint128,
+// We track the collateral that each individual user has locked for their sGPT tokens
+collaterals: Vec<Collateral>,
 }
 
 // This function initializes the contract
 pub fn init(
-    deps: &mut Extern,
-    env: Env,
-    _info: MessageInfo,
-    _msg: InitMsg,
+deps: &mut Extern,
+env: Env,
+_info: MessageInfo,
+_msg: InitMsg,
 ) -> StdResult<InitResponse> {
-    let state = State {
-        total_supply: 0,
-        total_collateral: 0,
-        collaterals: vec![],
-    };
+let state = State {
+    total_supply: 0,
+    total_collateral: 0,
+    collaterals: vec![],
+};
 
-    // We set the initial state
-    let state_binary = to_binary(&state)?;
-    deps.storage.set(env.contract.addr, "state", &state_binary);
+// We set the initial state
+let state_binary = to_binary(&state)?;
+deps.storage.set(env.contract.addr, "state", &state_binary);
 
-    // We return the init response
-    Ok(InitResponse::default())
+// We return the init response
+Ok(InitResponse::default())
 }
 
 // This function handles the minting of sGPT tokens
 pub fn mint(
-    deps: &mut Extern,
-    env: Env,
-    info: MessageInfo,
-    msg: MintMsg,
+deps: &mut Extern,
+env: Env,
+info: MessageInfo,
+msg: MintMsg,
 ) -> StdResult<HandleResponse> {
-    // We get the state from storage
-    let mut state: State = match deps.storage.get(env.contract.addr, "state") {
-        Some(binary) => from_binary(&binary)?,
-        None => return Err(StdError::NotFound {
-            entity: "State".to_string(),
-        }),
-    };
+// We get the state from storage
+let mut state: State = match deps.storage.get(env.contract.addr, "state") {
+    Some(binary) => from_binary(&binary)?,
+    None => return Err(StdError::NotFound {
+        entity: "State".to_string(),
+    }),
+};
 
-    // We check that the user has enough collateral locked
-    let mut total_collateral_locked = 0;
-    for collateral in &state.collaterals {
-        if collateral.token_symbol == COLLATERAL_TOKEN {
-            total_collateral_locked += collateral.amount;
-        }
+// We check that the user has enough collateral locked
+let mut total_collateral_locked = 0;
+for collateral in &state.collaterals {
+    if collateral.token_symbol == COLLATERAL_TOKEN {
+        total_collateral_locked += collateral.amount;
     }
+}
 
-    let amount_to_mint = msg.amount;
-    let required_collateral = amount_to_mint * COLLATERAL_RATE;
-    if required_collateral > total_collateral_locked {
-        return Err(StdError::GenericErr {
-            msg: "Not enough collateral locked".to_string(),
-        });
-    }
+let amount_to_mint = msg.amount;
+let required_collateral = amount_to_mint * COLLATERAL_RATE;
+if required_collateral > total_collateral_locked {
+    return Err(StdError::GenericErr {
+        msg: "Not enough collateral locked".to_string(),
+    });
+}
 
-    // We update the state
-    state.total_supply += amount_to_mint;
-    state.total_collateral += required_collateral;
-    let state_binary = to_binary(&state)?;
-    deps.storage.set(env.contract.addr, "state", &state_binary);
+// We update the state
+state.total_supply += amount_to_mint;
+state.total_collateral += required_collateral;
+let state_binary = to_binary(&state)?;
+deps.storage.set(env.contract.addr, "state", &state_binary);
 
-    // We transfer the sGPT tokens to the user
-    let amount = coin(amount_to_mint, SGPT_TOKEN);
-    let res = deps
-        .api
-        .transfer(env.contract.addr, &info.sender, amount)
-        .map_err(|_| StdError::Unexpected)?;
+// We transfer the sGPT tokens to the user
+let amount = coin(amount_to_mint, SGPT_TOKEN);
+let res = deps
+    .api
+    .transfer(env.contract.addr, &info.sender, amount)
+    .map_err(|_| StdError::Unexpected)?;
 
-    Ok(res)
+Ok(res)
 }
 
 // This function handles the locking of collateral for sGPT tokens
 pub fn lock_collateral(
-    deps: &mut Extern,
-    env: Env,
-    _info: MessageInfo,
-    msg: LockCollateralMsg,
+deps: &mut Extern,
+env: Env,
+_info: MessageInfo,
+msg: LockCollateralMsg,
 ) -> StdResult<HandleResponse> {
-    // We get the state from storage
-    let mut state: State = match deps.storage.get(env.contract.addr, "state") {
-        Some(binary) => from_binary(&binary)?,
-        None => return Err(StdError::NotFound {
-            entity: "State".to_string(),
-        }),
-    };
+// We get the state from storage
+let mut state: State = match deps.storage.get(env.contract.addr, "state") {
+    Some(binary) => from_binary(&binary)?,
+    None => return Err(StdError::NotFound {
+        entity: "State".to_string(),
+    }),
+};
 
-    // We check that the user has enough collateral to lock
-    let token_symbol = msg.collateral_token;
-    let amount_to_lock = msg.amount;
-    let res = deps
-        .api
-        .balance(env.contract.addr, &token_symbol, &info.sender)
-        .map_err(|_| StdError::Unexpected)?;
-    let amount_available = res.amount;
-    if amount_to_lock > amount_available {
-        return Err(StdError::GenericErr {
-            msg: "Not enough collateral available".to_string(),
-        });
-    }
-
-    // We update the state
-    state.collaterals.push(Collateral {
-        token_symbol,
-        amount: amount_to_lock,
+// We check that the user has enough collateral to lock
+let token_symbol = msg.collateral_token;
+let amount_to_lock = msg.amount;
+let res = deps
+    .api
+    .balance(env.contract.addr, &token_symbol, &info.sender)
+    .map_err(|_| StdError::Unexpected)?;
+let amount_available = res.amount;
+if amount_to_lock > amount_available {
+    return Err(StdError::GenericErr {
+        msg: "Not enough collateral available".to_string(),
     });
-    let state_binary = to_binary(&state)?;
-    deps.storage.set(env.contract.addr, "state", &state_binary);
+}
 
-    // We transfer the collateral from the user to the contract
-    let amount = coin(amount_to_lock, &token_symbol);
-    let res = deps
-        .api
-        .transfer_from(env.contract.addr, &info.sender, amount)
-        .map_err(|_| StdError::Unexpected)?;
+// We update the state
+state.collaterals.push(Collateral {
+    token_symbol,
+    amount: amount_to_lock,
+});
+let state_binary = to_binary(&state)?;
+deps.storage.set(env.contract.addr, "state", &state_binary);
 
-    Ok(res)
+// We transfer the collateral from the user to the contract
+let amount = coin(amount_to_lock, &token_symbol);
+let res = deps
+    .api
+    .transfer_from(env.contract.addr, &info.sender, amount)
+    .map_err(|_| StdError::Unexpected)?;
+
+Ok(res)
 }
 
 // This function handles the liquidation of sGPT tokens
 pub fn liquidate(
-    deps: &mut Extern,
-    env: Env,
-    info: MessageInfo,
-    msg: LiquidateMsg,
+deps: &mut Extern,
+env: Env,
+info: MessageInfo,
+msg: LiquidateMsg,
 ) -> StdResult<HandleResponse> {
-    // We get the state from storage
-    let mut state: State = match deps.storage.get(env.contract.addr, "state") {
-        Some(binary) => from_binary(&binary)?,
-        None => return Err(StdError::NotFound {
-            entity: "State".to_string(),
-        }),
-    };
+// We get the state from storage
+let mut state: State = match deps.storage.get(env.contract.addr, "state") {
+    Some(binary) => from_binary(&binary)?,
+    None => return Err(StdError::NotFound {
+        entity: "State".to_string(),
+    }),
+};
 
-    // We check that the user has enough sGPT tokens to liquidate
-    let amount_to_liquidate = msg.amount;
-    let amount_available = state.total_supply;
-    if amount_to_liquidate > amount_available {
-        return Err(StdError::GenericErr {
-            msg: "Not enough tokens to liquidate".to_string(),
-        });
-    }
+// We check that the user has enough sGPT tokens to liquidate
+let amount_to_liquidate = msg.amount;
+let amount_available = state.total_supply;
+if amount_to_liquidate > amount_available {
+    return Err(StdError::GenericErr {
+        msg: "Not enough tokens to liquidate".to_string(),
+    });
+}
 
-    // We update the state
-    state.total_supply -= amount_to_liquidate;
-    let state_binary = to_binary(&state)?;
-    deps.storage.set(env.contract.addr, "state", &state_binary);
+// We update the state
+state.total_supply -= amount_to_liquidate;
+let state_binary = to_binary(&state)?;
+deps.storage.set(env.contract.addr, "state", &state_binary);
 
-    // We transfer the collateral back to the user
-    let amount = coin(amount_to_liquidate * COLLATERAL_RATE, COLLATERAL_TOKEN);
-    let res = deps
-        .api
-        .transfer(env.contract.addr, &info.sender, amount)
-        .map_err(|_| StdError::Unexpected)?;
+// We transfer the collateral back to the user
+let amount = coin(amount_to_liquidate * COLLATERAL_RATE, COLLATERAL_TOKEN);
+let res = deps
+    .api
+    .transfer(env.contract.addr, &info.sender, amount)
+    .map_err(|_| StdError::Unexpected)?;
 
-    Ok(res)
+Ok(res)
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -192,221 +192,279 @@ pub struct InitMsg {}
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct MintMsg {
-    amount: Uint128,
+amount: Uint128,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct LockCollateralMsg {
-    collateral_token: String,
-    amount: Uint128,
+collateral_token: String,
+amount: Uint128,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct LiquidateMsg {
-    amount: Uint128,
+amount: Uint128,
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+use super::*;
 
-    #[test]
-    fn test_init() {
-        let mut deps = mock_dependencies(20, &[]);
+#[test]
+fn test_init() {
+    let mut deps = mock_dependencies(20, &[]);
 
-        let msg = InitMsg {};
-        let env = mock_env();
+    let msg = InitMsg {};
+    let env = mock_env();
 
-        // Initialize the contract
-        let res = init(&mut deps, env, mock_info(&env.contract.addr, &[]), msg);
-        assert_ok!(res);
+    // Initialize the contract
+    let res = init(&mut deps, env, mock_info(&env.contract.addr, &[]), msg);
+    assert_ok!(res);
 
-        // Check the state
-        let state_res = deps.storage.get(env.contract.addr, "state");
-        assert_some!(state_res);
-        let state: State = from_binary(&state_res.unwrap()).unwrap();
-        let expected_state = State {
-            total_supply: 0,
-            total_collateral: 0,
-            collaterals: vec![],
-        };
-        assert_eq!(state, expected_state);
+    // Check the state
+    let state_res = deps.storage.get(env.contract.addr, "state");
+    assert_some!(state_res);
+    let state: State = from_binary(&state_res.unwrap()).unwrap();
+    let expected_state = State {
+        total_supply: 0,
+        total_collateral: 0,
+        collaterals: vec![],
+    };
+    assert_eq!(state, expected_state);
+}
+
+#[test]
+fn test_mint() {
+    let mut deps = mock_dependencies(20, &[coin(100, COLLATERAL_TOKEN)]);
+
+    let msg = MintMsg { amount: Uint128(10) };
+    let env = mock_env();
+
+    // Initialize the contract
+    let res = init(&mut deps, env, mock_info(&env.contract.addr, &[]), InitMsg {});
+    assert_ok!(res);
+
+    // Mint some sGPT tokens
+    let res = mint(&mut deps, env, mock_info(&env.contract.addr, &[]), msg);
+    assert_ok!(res);
+
+    // Check the state
+    let state_res = deps.storage.get(env.contract.addr, "state");
+    assert_some!(state_res);
+    let state: State = from_binary(&state_res.unwrap()).unwrap();
+    let expected_state = State {
+        total_supply: Uint128(10),
+        total_collateral: Uint128(1500),
+        collaterals: vec![Collateral {
+            token_symbol: COLLATERAL_TOKEN.to_string(),
+            amount: Uint128(1500),
+        }],
+    };
+    assert_eq!(state, expected_state);
+
+    // Check the balance
+    let balance_res = deps.api.balance(env.contract.addr, SGPT_TOKEN, &env.contract.addr);
+    assert_ok!(balance_res);
+    let balance = balance_res.unwrap();
+    assert_eq!(balance.amount, Uint128(10));
+}
+
+#[test]
+fn test_lock_collateral() {
+    let mut deps = mock_dependencies(20, &[coin(100, COLLATERAL_TOKEN)]);
+
+    let msg = LockCollateralMsg {
+        collateral_token: COLLATERAL_TOKEN.to_string(),
+        amount: Uint128(50),
+    };
+    let env = mock_env();
+
+    // Initialize the contract
+    let res = init(&mut deps, env, mock_info(&env.contract.addr, &[]), InitMsg {});
+    assert_ok!(res);
+
+    // Lock some collateral
+    let res =
+        lock_collateral(&mut deps, env, mock_info(&env.contract.addr, &[]), msg.clone());
+    assert_ok!(res);
+
+    // Check the state
+    let state_res = deps.storage.get(env.contract.addr, "state");
+    assert_some!(state_res);
+    let state: State = from_binary(&state_res.unwrap()).unwrap();
+    let expected_state = State {
+        total_supply: 0,
+        total_collateral: Uint128(750),
+        collaterals: vec![Collateral {
+            token_symbol: COLLATERAL_TOKEN.to_string(),
+            amount: Uint128(750),
+        }],
+    };
+    assert_eq!(state, expected_state);
+
+    // Check the balance
+    let balance_res = deps.api.balance(env.contract.addr, COLLATERAL_TOKEN, &env.contract.addr);
+    assert_ok!(balance_res);
+    let balance = balance_res.unwrap();
+    assert_eq!(balance.amount, Uint128(50));
+}
+
+#[test]
+fn test_liquidate() {
+    let mut deps = mock_dependencies(20, &[coin(100, COLLATERAL_TOKEN)]);
+
+    let msg = LiquidateMsg { amount: Uint128(10) };
+    let env = mock_env();
+
+    // Initialize the contract
+    let res = init(&mut deps, env, mock_info(&env.contract.addr, &[]), InitMsg {});
+    assert_ok!(res);
+
+    // Mint some sGPT tokens
+    let mint_msg = MintMsg { amount: Uint128(10) };
+    let res = mint(&mut deps, env, mock_info(&env.contract.addr, &[]), mint_msg);
+    assert_ok!(res);
+
+    // Liquidate the sGPT tokens
+    let res = liquidate(&mut deps, env, mock_info(&env.contract.addr, &[]), msg);
+    assert_ok!(res);
+
+    // Check the state
+    let state_res = deps.storage.get(env.contract.addr, "state");
+    assert_some!(state_res);
+    let state: State = from_binary(&state_res.unwrap()).unwrap();
+    let expected_state = State {
+        total_supply: Uint128(0),
+        total_collateral: Uint128(0),
+        collaterals: vec![],
+    };
+    assert_eq!(state, expected_state);
+
+    // Check the balance
+    let balance_res = deps.api.balance(env.contract.addr, COLLATERAL_TOKEN, &env.contract.addr);
+    assert_ok!(balance_res);
+    let balance = balance_res.unwrap();
+    assert_eq!(balance.amount, Uint128(150));
+}
+
+fn mock_dependencies(balance: u64, coins: &[coin]) -> Extern {
+    Extern {
+        api: MockApi::new(coins),
+        storage: MockStorage::new(),
+        logger: MockLogger::new(),
+        balance: MockBalance::new(balance),
     }
+}
 
-    #[test]
-    fn test_mint() {
-        let mut deps = mock_dependencies(20, &[coin(100, COLLATERAL_TOKEN)]);
-
-        let msg = MintMsg { amount: Uint128(10) };
-        let env = mock_env();
-
-        // Initialize the contract
-        let res = init(&mut deps, env, mock_info(&env.contract.addr, &[]), InitMsg {});
-        assert_ok!(res);
-
-        // Mint some sGPT tokens
-        let res = mint(&mut deps, env, mock_info(&env.contract.addr, &[]), msg);
-        assert_ok!(res);
-
-        // Check the state
-        let state_res = deps.storage.get(env.contract.addr, "state");
-        assert_some!(state_res);
-        let state: State = from_binary(&state_res.unwrap()).unwrap();
-        let expected_state = State {
-            total_supply: Uint128(10),
-            total_collateral: Uint128(1500),
-            collaterals: vec![Collateral {
-                token_symbol: COLLATERAL_TOKEN.to_string(),
-                amount: Uint128(1500),
-            }],
-        };
-        assert_eq!(state, expected_state);
-
-        // Check the balance
-        let balance_res = deps.api.balance(env.contract.addr, SGPT_TOKEN, &env.contract.addr);
-        assert_ok!(balance_res);
-        let balance = balance_res.unwrap();
-        assert_eq!(balance.amount, Uint128(10));
-    }
-
-    #[test]
-    fn test_lock_collateral() {
-        let mut deps = mock_dependencies(20, &[coin(100, COLLATERAL_TOKEN)]);
-
-        let msg = LockCollateralMsg {
-            collateral_token: COLLATERAL_TOKEN.to_string(),
-            amount: Uint128(50),
-        };
-        let env = mock_env();
-
-        // Initialize the contract
-        let res = init(&mut deps, env, mock_info(&env.contract.addr, &[]), InitMsg {});
-        assert_ok!(res);
-
-        // Lock some collateral
-        let res =
-            lock_collateral(&mut deps, env, mock_info(&env.contract.addr, &[]), msg.clone());
-        assert_ok!(res);
-
-        // Check the state
-        let state_res = deps.storage.get(env.contract.addr, "state");
-        assert_some!(state_res);
-        let state: State = from_binary(&state_res.unwrap()).unwrap();
-        let expected_state = State {
-            total_supply: 0,
-            total_collateral: Uint128(750),
-            collaterals: vec![Collateral {
-                token_symbol: COLLATERAL_TOKEN.to_string(),
-                amount: Uint128(750),
-            }],
-        };
-        assert_eq!(state, expected_state);
-
-        // Check the balance
-        let balance_res = deps.api.balance(env.contract.addr, COLLATERAL_TOKEN, &env.contract.addr);
-        assert_ok!(balance_res);
-        let balance = balance_res.unwrap();
-        assert_eq!(balance.amount, Uint128(50));
-    }
-
-    #[test]
-    fn test_liquidate() {
-        let mut deps = mock_dependencies(20, &[coin(100, COLLATERAL_TOKEN)]);
-
-        let msg = LiquidateMsg { amount: Uint128(10) };
-        let env = mock_env();
-
-        // Initialize the contract
-        let res = init(&mut deps, env, mock_info(&env.contract.addr, &[]), InitMsg {});
-        assert_ok!(res);
-
-        // Mint some sGPT tokens
-        let mint_msg = MintMsg { amount: Uint128(10) };
-        let res = mint(&mut deps, env, mock_info(&env.contract.addr, &[]), mint_msg);
-        assert_ok!(res);
-
-        // Liquidate the sGPT tokens
-        let res = liquidate(&mut deps, env, mock_info(&env.contract.addr, &[]), msg);
-        assert_ok!(res);
-
-        // Check the state
-        let state_res = deps.storage.get(env.contract.addr, "state");
-        assert_some!(state_res);
-        let state: State = from_binary(&state_res.unwrap()).unwrap();
-        let expected_state = State {
-            total_supply: Uint128(0),
-            total_collateral: Uint128(0),
-            collaterals: vec![],
-        };
-        assert_eq!(state, expected_state);
-
-        // Check the balance
-        let balance_res = deps.api.balance(env.contract.addr, COLLATERAL_TOKEN, &env.contract.addr);
-        assert_ok!(balance_res);
-        let balance = balance_res.unwrap();
-        assert_eq!(balance.amount, Uint128(150));
-    }
-
-    fn mock_dependencies(balance: u64, coins: &[coin]) -> Extern {
-        Extern {
-            api: MockApi::new(coins),
-            storage: MockStorage::new(),
-            logger: MockLogger::new(),
-            balance: MockBalance::new(balance),
-        }
-    }
-
-    fn mock_env() -> Env {
-        Env {
-            contract: HumanAddr::from("contract"),
-            message: MessageInfo {
-                sender: HumanAddr::from("sender"),
-                sent_funds: vec![],
-            },
-        }
-    }
-
-    fn mock_info(contract_addr: &HumanAddr, sent_funds: &[coin]) -> MessageInfo {
-        MessageInfo {
+fn mock_env() -> Env {
+    Env {
+        contract: HumanAddr::from("contract"),
+        message: MessageInfo {
             sender: HumanAddr::from("sender"),
-            sent_funds: sent_funds.to_vec(),
+            sent_funds: vec![],
+        },
+    }
+}
+
+fn mock_info(contract_addr: &HumanAddr, sent_funds: &[coin]) -> MessageInfo {
+    MessageInfo {
+        sender: HumanAddr::from("sender"),
+        sent_funds: sent_funds.to_vec(),
+    }
+}
+
+struct MockApi {
+    coins: Vec<coin>,
+}
+
+impl MockApi {
+    fn new(coins: &[coin]) -> Self {
+        Self {
+            coins: coins.to_vec(),
         }
     }
+}
 
-    struct MockApi {
-        coins: Vec<coin>,
+impl Api for MockApi {
+    fn balance(&self, _: HumanAddr, _: &str, _: &HumanAddr) -> StdResult<coin> {
+        let mut res = self
+            .coins
+            .iter()
+            .find(|c| c.denom == COLLATERAL_TOKEN)
+            .cloned();
+        if res.is_none() {
+            res = Some(coin(0, COLLATERAL_TOKEN));
+        }
+        Ok(res.unwrap())
     }
 
-    impl MockApi {
-        fn new(coins: &[coin]) -> Self {
-            Self {
-                coins: coins.to_vec(),
-            }
-        }
+    fn transfer_from(
+        &self,
+        _: HumanAddr,
+        _: &HumanAddr,
+        _: coin,
+    ) -> StdResult<HandleResponse> {
+        Ok(HandleResponse {
+            messages: vec![],
+            attributes: vec![attr("action", "transfer_from")],
+            data: None,
+        })
     }
+fn transfer(&mut self, _: HumanAddr, to: &HumanAddr, amount: Coin) -> StdResult<HandleResponse> {
+let mut total_sgpt_amount: Uint128 = self.sgpt_amount;
+let mut total_collateral_amount: Uint128 = self.collateral_amount;
 
-    impl Api for MockApi {
-        fn balance(&self, _: HumanAddr, _: &str, _: &HumanAddr) -> StdResult<coin> {
-            let mut res = self
-                .coins
-                .iter()
-                .find(|c| c.denom == COLLATERAL_TOKEN)
-                .cloned();
-            if res.is_none() {
-                res = Some(coin(0, COLLATERAL_TOKEN));
-            }
-            Ok(res.unwrap())
-        }
+// Check if the transfer is valid
+if total_sgpt_amount >= amount {
+    // Calculate the new sGPT and collateral amounts
+    total_sgpt_amount = total_sgpt_amount - amount;
+    total_collateral_amount = total_collateral_amount * total_sgpt_amount / self.sgpt_amount;
 
-        fn transfer_from(
-            &self,
-            _: HumanAddr,
-            _: &HumanAddr,
-            _: coin,
-        ) -> StdResult<HandleResponse> {
-            Ok(HandleResponse {
-                messages: vec![],
-                attributes: vec![attr("action", "transfer_from")],
-                data: None,
-            })
-        }
+    // Update the contract state
+    self.sgpt_amount = total_sgpt_amount;
+    self.collateral_amount = total_collateral_amount;
+
+    // Transfer the sGPT and collateral tokens
+    let transfer_sgpt_msg = self.create_transfer_message(to, amount);
+    let transfer_collateral_msg = self.create_transfer_message(to, total_collateral_amount / 150);
+
+    // Return the HandleResponse
+    return Ok(HandleResponse {
+        messages: vec![transfer_sgpt_msg, transfer_collateral_msg],
+        attributes: vec![attr("action", "transfer")],
+        data: None,
+    });
+}
+
+// Check if the transfer is over collateralized
+if total_sgpt_amount + total_collateral_amount / 150 >= amount {
+    // Calculate the new sGPT and collateral amounts
+    total_sgpt_amount = total_sgpt_amount + total_collateral_amount / 150 - amount;
+    total_collateral_amount = total_collateral_amount * total_sgpt_amount / (self.sgpt_amount + total_collateral_amount / 150);
+
+    // Update the contract state
+    self.sgpt_amount = total_sgpt_amount;
+    self.collateral_amount = total_collateral_amount;
+
+    // Transfer the sGPT and collateral tokens
+    let transfer_sgpt_msg = self.create_transfer_message(to, amount);
+    let transfer_collateral_msg = self.create_transfer_message(to, total_collateral_amount / 150);
+
+    // Return the HandleResponse
+    return Ok(HandleResponse {
+        messages: vec![transfer_sgpt_msg, transfer_collateral_msg],
+        attributes: vec![attr("action", "transfer_over_collateralized")],
+        data: None,
+    });
+}
+
+// If the transfer is not valid or over collateralized, trigger the liquidation mechanism
+let liquidator_address = self.get_liquidator_address();
+let liquidate_msg = Self::create_liquidate_message(to, liquidator_address);
+
+return Ok(HandleResponse {
+    messages: vec![liquidate_msg],
+    attributes: vec![attr("action", "liquidate")],
+    data: None,
+});
+}
