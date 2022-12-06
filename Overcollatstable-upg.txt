@@ -1,0 +1,240 @@
+// Imports
+use cosmwasm_std::{
+    attr,
+    coins,
+    from_slice,
+    to_binary,
+    Api,
+    Binary,
+    Coin,
+    Env,
+    HandleResponse,
+    HumanAddr,
+    InitResponse,
+    MessageInfo,
+    Querier,
+    StdError,
+    StdResult,
+    Storage,
+    Uint128,
+};
+
+// Constants
+const COLLATERAL_RATE: Uint128 = 150;
+const COLLATERAL_TOKEN: &str = "juno";
+
+// Storage Keys
+static COLLATERAL_AMOUNT: &[u8] = b"collateral_amount";
+static SGPT_AMOUNT: &[u8] = b"sgpt_amount";
+
+// Structs
+#[derive(Clone, Debug, PartialEq)]
+pub struct State {
+    collateral_amount: Uint128,
+    sgpt_amount: Uint128,
+}
+
+// Implementations
+impl State {
+    pub fn new() -> Self {
+        Self {
+            collateral_amount: Uint128::zero(),
+            sgpt_amount: Uint128::zero(),
+        }
+    }
+
+    pub fn from_storage(storage: &Storage) -> StdResult<Self> {
+        let collateral_amount = storage
+            .get(COLLATERAL_AMOUNT)?
+            .and_then(|bz| from_slice(&bz))
+            .unwrap_or_default();
+        let sgpt_amount = storage
+            .get(SGPT_AMOUNT)?
+            .and_then(|bz| from_slice(&bz))
+            .unwrap_or_default();
+        Ok(Self {
+            collateral_amount,
+            sgpt_amount,
+        })
+    }
+
+    pub fn to_storage(&self) -> StdResult<Vec<(Vec<u8>, Vec<u8>)>> {
+        let mut storage = vec![];
+        storage.push((COLLATERAL_AMOUNT.to_vec(), to_binary(&self.collateral_amount)?));
+        storage.push((SGPT_AMOUNT.to_vec(), to_binary(&self.sgpt_amount)?));
+        Ok(storage)
+    }
+}
+
+// Init
+pub fn init(
+    _env: Env,
+    _info: MessageInfo,
+    _args: Vec<u8>,
+    _querier: Option<Querier>,
+) -> StdResult<InitResponse> {
+    let state = State::new();
+    Ok(InitResponse::default())
+}
+
+// Handle
+pub fn handle(
+    env: Env,
+    info: MessageInfo,
+    msg: Binary,
+    storage: &mut Storage,
+    querier: Option<Querier>,
+) -> StdResult<HandleResponse> {
+    let state = State::from_storage(storage)?;
+
+    match from_slice(&msg)? {
+        // Handle minting sGPT
+        MsgMint { collateral, sgpt } => {
+            // Check that the collateral is Juno
+            if collateral.denom != COLLATERAL_TOKEN {
+                return Err(StdError::generic_err(
+                    "Collateral must be Juno tokens",
+                ));
+            }
+
+            // Check that the collateral amount is greater than or equal to the sGPT amount * the collateral rate
+            if collateral.amount < sgpt * COLLATERAL_RATE {
+                return Err(StdError::generic_err(
+                    "Collateral amount must be greater than or equal to the sGPT amount * the collateral rate",
+                ));
+            }
+
+            // Update the state
+            let new_collateral_amount = state.collateral_amount + collateral.amount;
+            let new_sgpt_amount = state.sgpt_amount + sgpt;
+
+            // Store the new state
+            let new_state = State {
+                collateral_amount: new_collateral_amount,
+                sgpt_amount: new_sgpt_amount,
+            };
+            storage.set(COLLATERAL_AMOUNT, to_binary(&new_state.collateral_amount)?)?;
+            storage.set(SGPT_AMOUNT, to_binary(&new_state.sgpt_amount)?)?;
+
+            // Return success
+            Ok(HandleResponse::default())
+        }
+
+        // Handle burning sGPT
+        MsgBurn { sgpt } => {
+            // Check that the sGPT amount is less than or equal to the current sGPT amount
+            if sgpt > state.sgpt_amount {
+                return Err(StdError::generic_err(
+                    "sGPT amount must be less than or equal to the current sGPT amount",
+                ));
+            }
+
+            // Update the state
+            let new_sgpt_amount = state.sgpt_amount - sgpt;
+
+            // Store the new state
+            let new_state = State {
+                collateral_amount: state.collateral_amount,
+                sgpt_amount: new_sgpt_amount,
+            };
+            storage.set(COLLATERAL_AMOUNT, to_binary(&new_state.collateral_amount)?)?;
+            storage.set(SGPT_AMOUNT, to_binary(&new_state.sgpt_amount)?)?;
+
+            // Return success
+            Ok(HandleResponse::default())
+        }
+
+        // Handle liquidation
+        MsgLiquidate { address } => {
+            // Get the current balance of the address
+            let balance = querier.ok_or_else(|| StdError::generic_err("Querier required"))?
+                .query_balance(&address)?;
+
+            // Calculate the amount of sGPT to burn
+            let sgpt_to_burn = balance.amount * COLLATERAL_RATE;
+
+            // Check that the sGPT amount to burn is less than or equal to the current sGPT amount
+            if sgpt_to_burn > state.sgpt_amount {
+                return Err(StdError::generic_err(
+                    "sGPT amount to burn must be less than or equal to the current sGPT amount",
+                ));
+            }
+
+            // Update the state
+            let new_sgpt_amount = state.sgpt_amount - sgpt_to_burn;
+
+            // Store the new state
+            let new_state = State {
+                collateral_amount: state.collateral_amount,
+                sgpt_amount: new_sgpt_amount,
+            };
+            storage.set(COLLATERAL_AMOUNT, to_binary(&new_state.collateral_amount)?)?;
+            storage.set(SGPT_AMOUNT, to_binary(&new_state.sgpt_amount)?)?;
+
+            // Return success
+            Ok(HandleResponse::default())
+        }
+
+        // Handle query messages
+        MsgQuery { query } => {
+            match query {
+                Query::CollateralAmount => {
+                    let res = to_binary(&state.collateral_amount)?;
+                    Ok(HandleResponse {
+                        messages: vec![],
+                        log: vec![],
+                        data: Some(res),
+                    })
+                }
+                Query::SgptAmount => {
+                    let res = to_binary(&state.sgpt_amount)?;
+                    Ok(HandleResponse {
+                        messages: vec![],
+                        log: vec![],
+                        data: Some(res),
+                    })
+                }
+            }
+        }
+    }
+}
+
+// Messages
+#[derive(Clone, Debug, PartialEq)]
+pub enum Msg {
+    Mint { collateral: Coin, sgpt: Uint128 },
+    Burn { sgpt: Uint128 },
+    Liquidate { address: HumanAddr },
+    Query { query: Query },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Query {
+    CollateralAmount,
+    SgptAmount,
+}
+
+// Messages Implementations
+impl MsgMint {
+    pub fn new(collateral: Coin, sgpt: Uint128) -> Self {
+        Self { collateral, sgpt }
+    }
+}
+
+impl MsgBurn {
+    pub fn new(sgpt: Uint128) -> Self {
+        Self { sgpt }
+    }
+}
+
+impl MsgLiquidate {
+    pub fn new(address: HumanAddr) -> Self {
+        Self { address }
+    }
+}
+
+impl MsgQuery {
+    pub fn new(query: Query) -> Self {
+        Self { query }
+    }
+}
